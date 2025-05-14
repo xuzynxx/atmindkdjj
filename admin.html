@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pterodactyl Panel Manager</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            background-color: #5865F2;
+            color: white;
+            padding: 20px 0;
+            text-align: center;
+            border-radius: 8px 8px 0 0;
+            margin-bottom: 20px;
+        }
+        h1 {
+            margin: 0;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: #eee;
+            margin-right: 5px;
+            border-radius: 5px 5px 0 0;
+        }
+        .tab.active {
+            background-color: #5865F2;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+            background-color: white;
+            padding: 20px;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .tab-content.active {
+            display: block;
+        }
+        form {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #5865F2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #4752C4;
+        }
+        .server-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .server-card {
+            background-color: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .server-card h3 {
+            margin-top: 0;
+            color: #5865F2;
+        }
+        .server-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .server-actions button {
+            flex: 1;
+            padding: 8px;
+        }
+        .status-online {
+            color: #43B581;
+        }
+        .status-offline {
+            color: #F04747;
+        }
+        .status-starting {
+            color: #FAA61A;
+        }
+        .full-width {
+            grid-column: 1 / -1;
+        }
+        .api-settings {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .logs {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            height: 200px;
+            overflow-y: auto;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        .error {
+            color: #F04747;
+            background-color: #ffe6e6;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        @media (max-width: 768px) {
+            form {
+                grid-template-columns: 1fr;
+            }
+            .server-list {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Pterodactyl Panel Manager</h1>
+            <p>Kelola server dan user tanpa perlu akses web panel</p>
+        </header>
+
+        <div class="api-settings">
+            <h2>Panel Connection</h2>
+            <div class="form-group">
+                <label for="api-url">Panel URL</label>
+                <input type="text" id="api-url" placeholder="https://panel.example.com" value="https://panel.example.com">
+            </div>
+            <div class="form-group">
+                <label>API Key</label>
+                <input type="text" value="(embedded in code)" readonly>
+            </div>
+            <button id="test-connection">Test Connection</button>
+            <div id="connection-status" style="margin-top: 10px;"></div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="servers">Servers</div>
+            <div class="tab" data-tab="create-server">Create Server</div>
+            <div class="tab" data-tab="users">Users</div>
+            <div class="tab" data-tab="create-user">Create User</div>
+        </div>
+
+        <div id="servers" class="tab-content active">
+            <h2>Your Servers</h2>
+            <div class="server-list" id="server-list">
+                <div class="loading">Loading servers...</div>
+            </div>
+        </div>
+
+        <div id="create-server" class="tab-content">
+            <h2>Create New Server</h2>
+            <form id="server-form">
+                <div class="form-group">
+                    <label for="server-name">Server Name</label>
+                    <input type="text" id="server-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="server-user">User</label>
+                    <select id="server-user" required>
+                        <option value="">Loading users...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="server-egg">Egg</label>
+                    <select id="server-egg" required>
+                        <option value="">Loading eggs...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="server-location">Location</label>
+                    <select id="server-location" required>
+                        <option value="">Loading locations...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="server-ram">RAM (MB)</label>
+                    <input type="number" id="server-ram" min="512" value="1024" required>
+                </div>
+                <div class="form-group">
+                    <label for="server-disk">Disk Space (MB)</label>
+                    <input type="number" id="server-disk" min="1024" value="5120" required>
+                </div>
+                <div class="form-group">
+                    <label for="server-cpu">CPU Limit (%)</label>
+                    <input type="number" id="server-cpu" min="10" max="100" value="50" required>
+                </div>
+                <div class="form-group full-width">
+                    <label for="server-startup">Startup Command</label>
+                    <input type="text" id="server-startup" placeholder="java -Xms128M -Xmx{MAX_MEMORY}M -jar server.jar">
+                </div>
+                <div class="form-group full-width">
+                    <button type="submit">Create Server</button>
+                </div>
+            </form>
+        </div>
+
+        <div id="users" class="tab-content">
+            <h2>User Management</h2>
+            <div id="user-list">
+                <div class="loading">Loading users...</div>
+            </div>
+        </div>
+
+        <div id="create-user" class="tab-content">
+            <h2>Create New User</h2>
+            <form id="user-form">
+                <div class="form-group">
+                    <label for="user-email">Email</label>
+                    <input type="email" id="user-email" required>
+                </div>
+                <div class="form-group">
+                    <label for="user-username">Username</label>
+                    <input type="text" id="user-username" required>
+                </div>
+                <div class="form-group">
+                    <label for="user-firstname">First Name</label>
+                    <input type="text" id="user-firstname" required>
+                </div>
+                <div class="form-group">
+                    <label for="user-lastname">Last Name</label>
+                    <input type="text" id="user-lastname" required>
+                </div>
+                <div class="form-group">
+                    <label for="user-password">Password</label>
+                    <input type="password" id="user-password" required>
+                </div>
+                <div class="form-group">
+                    <label for="user-root">Root Admin</label>
+                    <select id="user-root">
+                        <option value="0">No</option>
+                        <option value="1">Yes</option>
+                    </select>
+                </div>
+                <div class="form-group full-width">
+                    <button type="submit">Create User</button>
+                </div>
+            </form>
+        </div>
+
+        <div id="server-details" class="tab-content" style="display: none;">
+            <button id="back-to-servers" style="margin-bottom: 20px;">← Back to Servers</button>
+            <h2 id="detail-server-name">Server Details</h2>
+            <div class="server-info">
+                <p><strong>Status:</strong> <span id="detail-server-status" class="status-online">Loading...</span></p>
+                <p><strong>Node:</strong> <span id="detail-server-node">Loading...</span></p>
+                <p><strong>Memory:</strong> <span id="detail-server-memory">Loading...</span></p>
+                <p><strong>CPU:</strong> <span id="detail-server-cpu">Loading...</span></p>
+                <p><strong>Uptime:</strong> <span id="detail-server-uptime">Loading...</span></p>
+            </div>
+            
+            <div class="server-actions" style="margin-top: 20px;">
+                <button id="start-server">Start</button>
+                <button id="stop-server">Stop</button>
+                <button id="restart-server">Restart</button>
+                <button id="kill-server">Kill</button>
+            </div>
+            
+            <div style="margin-top: 30px;">
+                <h3>Console</h3>
+                <div class="logs" id="server-console">
+                    Connecting to server console...
+                </div>
+                <div style="margin-top: 10px;">
+                    <input type="text" id="console-command" placeholder="Enter command..." style="width: calc(100% - 90px);">
+                    <button id="send-command">Send</button>
+                </div>
+            </div>
+            
+            <div style="margin-top: 30px;">
+                <h3>Server Settings</h3>
+                <form id="server-settings-form">
+                    <div class="form-group">
+                        <label for="edit-server-name">Server Name</label>
+                        <input type="text" id="edit-server-name">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-server-ram">RAM (MB)</label>
+                        <input type="number" id="edit-server-ram">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-server-disk">Disk Space (MB)</label>
+                        <input type="number" id="edit-server-disk">
+                    </div>
+                    <div class="form-group">
+                        <button type="submit">Save Changes</button>
+                        <button type="button" id="delete-server" style="background-color: #F04747;">Delete Server</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - Edit these values with your actual Pterodactyl Panel details
+        const config = {
+            panelUrl: 'https://marvelshp.crasher.my.id',  // Change this to your panel URL
+            apiKey: 'ptlc_oNwRK177W3PZImniEIxUuTCTb9iMUp6IH9l9nsxuH7K',            // Change this to your actual API key
+            clientApiKey: 'ptlc_o3tOf614FaGFuzf4VwD07PPwQWFZx20IQ7MpzBPIiYc' // Client API key if needed
+        };
+
+        // Current state
+        let currentState = {
+            selectedServer: null,
+            servers: [],
+            users: [],
+            eggs: [],
+            locations: [],
+            nodes: []
+        };
+
+        // Tab switching functionality
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Remove active class from all tabs and content
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                // Add active class to clicked tab and corresponding content
+                tab.classList.add('active');
+                const tabId = tab.getAttribute('data-tab');
+                document.getElementById(tabId).classList.add('active');
+            });
+        });
+
+        // Back to servers button
+        document.getElementById('back-to-servers').addEventListener('click', () => {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById('servers').classList.add('active');
+            document.querySelector('.tab[data-tab="servers"]').classList.add('active');
+        });
+
+        // API Helper Functions
+        async function makeApiRequest(endpoint, method = 'GET', data = null) {
+            const url = `${config.panelUrl}/api/${endpoint}`;
+            const headers = {
+                'Authorization': `Bearer ${config.apiKey}`,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            };
+
+            try {
+                const response = await fetch(url, {
+                    method,
+                    headers,
+                    body: data ? JSON.stringify(data) : null
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error('API request error:', error);
+                showError(`Failed to connect to Pterodactyl Panel: ${error.message}`);
+                return null;
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.textContent = message;
+            document.querySelector('.container').prepend(errorDiv);
+            
+            // Remove error after 5 seconds
+            setTimeout(() => {
+                errorDiv.remove();
+            }, 5000);
+        }
+
+        function showSuccess(message) {
+            const successDiv = document.createElement('div');
+            successDiv.className = 'error';
+            successDiv.style.backgroundColor = '#e6ffe6';
+            successDiv.style.color = '#43B581';
+            successDiv.textContent = message;
+            document.querySelector('.container').prepend(successDiv);
+            
+            // Remove success after 5 seconds
+            setTimeout(() => {
+                successDiv.remove();
+            }, 5000);
+        }
+
+        // Load data from Pterodactyl API
+        async function loadAllData() {
+            try {
+                // Load servers
+                const serversData = await makeApiRequest('application/servers');
+                if (serversData) {
+                    currentState.servers = serversData.data;
+                    renderServers();
+                }
+
+                // Load users
+                const usersData = await makeApiRequest('application/users');
+                if (usersData) {
+                    currentState.users = usersData.data;
+                    renderUsers();
+                    populateUserDropdown();
+                }
+
+                // Load eggs (for server creation)
+                const eggsData = await makeApiRequest('application/nests');
+                if (eggsData) {
+                    currentState.eggs = eggsData.data;
+                    populateEggDropdown();
+                }
+
+                // Load locations (for server creation)
+                const locationsData = await makeApiRequest('application/locations');
+                if (locationsData) {
+                    currentState.locations = locationsData.data;
+                    populateLocationDropdown();
+                }
+
+                // Load nodes (for server details)
+                const nodesData = await makeApiRequest('application/nodes');
+                if (nodesData) {
+                    currentState.nodes = nodesData.data;
+                }
+
+            } catch (error) {
+                console.error('Error loading data:', error);
+                showError(`Failed to load data: ${error.message}`);
+            }
+        }
+
+        // Render servers list
+        function renderServers() {
+            const serverList = document.getElementById('server-list');
+            serverList.innerHTML = '';
+            
+            if (currentState.servers.length === 0) {
+                serverList.innerHTML = '<div class="server-card"><p>No servers found.</p></div>';
+                return;
+            }
+            
+            currentState.servers.forEach(server => {
+                const serverCard = document.createElement('div');
+                serverCard.className = 'server-card';
+                
+                let statusClass = 'status-offline';
+                let statusText = 'offline';
+                
+                // Note: Actual status would come from server details API
+                // This is just for demonstration
+                if (server.attributes.id % 2 === 0) {
+                    statusClass = 'status-online';
+                    statusText = 'online';
+                } else if (server.attributes.id % 3 === 0) {
+                    statusClass = 'status-starting';
+                    statusText = 'starting';
+                }
+                
+                serverCard.innerHTML = `
+                    <h3>${server.attributes.name}</h3>
+                    <p><strong>Identifier:</strong> ${server.attributes.identifier}</p>
+                    <p><strong>Status:</strong> <span class="${statusClass}">${statusText}</span></p>
+                    <div class="server-actions">
+                        <button class="manage-server" data-server-id="${server.attributes.identifier}">Manage</button>
+                    </div>
+                `;
+                
+                serverList.appendChild(serverCard);
+            });
+            
+            // Add event listeners to manage buttons
+            document.querySelectorAll('.manage-server').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const serverId = btn.getAttribute('data-server-id');
+                    showServerDetails(serverId);
+                });
+            });
+        }
+
+        // Show server details
+        async function showServerDetails(serverId) {
+            try {
+                const serverDetails = await makeApiRequest(`client/servers/${serverId}`);
+                if (!serverDetails) return;
+                
+                const server = serverDetails.attributes;
+                currentState.selectedServer = serverId;
+                
+                // Update UI with server details
+                document.getElementById('detail-server-name').textContent = server.name;
+                document.getElementById('detail-server-status').textContent = server.status || 'unknown';
+                document.getElementById('detail-server-status').className = 
+                    server.status === 'running' ? 'status-online' : 
+                    server.status === 'offline' ? 'status-offline' : 'status-starting';
+                
+                // Find node information
+                const node = currentState.nodes.find(n => n.attributes.id === server.node);
+                document.getElementById('detail-server-node').textContent = node ? node.attributes.name : 'Unknown';
+                
+                // Resource usage would come from server utilization API
+                document.getElementById('detail-server-memory').textContent = 
+                    `${Math.round(server.limits.memory / 1024)}MB / ${server.limits.memory}MB`;
+                document.getElementById('detail-server-cpu').textContent = 
+                    `0% / ${server.limits.cpu}%`;
+                document.getElementById('detail-server-uptime').textContent = 
+                    server.status === 'running' ? 'Calculating...' : 'Offline';
+                
+                // Edit form values
+                document.getElementById('edit-server-name').value = server.name;
+                document.getElementById('edit-server-ram').value = server.limits.memory;
+                document.getElementById('edit-server-disk').value = server.limits.disk;
+                
+                // Hide all tabs and show server details
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                document.getElementById('server-details').classList.add('active');
+                
+                // Load console output
+                loadConsoleOutput(serverId);
+                
+            } catch (error) {
+                console.error('Error loading server details:', error);
+                showError(`Failed to load server details: ${error.message}`);
+            }
+        }
+
+        // Load console output
+        async function loadConsoleOutput(serverId) {
+            try {
+                const consoleOutput = await makeApiRequest(`client/servers/${serverId}/websocket`);
+                if (consoleOutput) {
+                    // In a real app, you would establish a WebSocket connection here
+                    document.getElementById('server-console').textContent = 
+                        "Connected to server console. Ready for commands.\n" +
+                        "Note: This demo doesn't establish real WebSocket connections.";
+                }
+            } catch (error) {
+                console.error('Error connecting to console:', error);
+                document.getElementById('server-console').textContent = 
+                    `Failed to connect to server console: ${error.message}`;
+            }
+        }
+
+        // Render users list
+        function renderUsers() {
+            const userList = document.getElementById('user-list');
+            userList.innerHTML = '';
+            
+            if (currentState.users.length === 0) {
+                userList.innerHTML = '<div class="server-card"><p>No users found.</p></div>';
+                return;
+            }
+            
+            currentState.users.forEach(user => {
+                const userCard = document.createElement('div');
+                userCard.className = 'server-card';
+                userCard.innerHTML = `
+                    <h3>${user.attributes.first_name} ${user.attributes.last_name} (${user.attributes.username})</h3>
+                    <p><strong>Email:</strong> ${user.attributes.email}</p>
+                    <p><strong>Root Admin:</strong> ${user.attributes.root_admin ? 'Yes' : 'No'}</p>
+                    <div class="server-actions">
+                        <button class="edit-user" data-user-id="${user.attributes.id}">Edit</button>
+                        <button class="delete-user" data-user-id="${user.attributes.id}">Delete</button>
+                    </div>
+                `;
+                
+                userList.appendChild(userCard);
+            });
+        }
+
+        // Populate user dropdown for server creation
+        function populateUserDropdown() {
+            const userSelect = document.getElementById('server-user');
+            userSelect.innerHTML = '<option value="">Select user...</option>';
+            
+            currentState.users.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.attributes.id;
+                option.textContent = `${user.attributes.first_name} ${user.attributes.last_name} (${user.attributes.username})`;
+                userSelect.appendChild(option);
+            });
+        }
+
+        // Populate egg dropdown for server creation
+        function populateEggDropdown() {
+            const eggSelect = document.getElementById('server-egg');
+            eggSelect.innerHTML = '<option value="">Select egg...</option>';
+            
+            currentState.eggs.forEach(nest => {
+                const option = document.createElement('option');
+                option.value = nest.attributes.id;
+                option.textContent = nest.attributes.name;
+                eggSelect.appendChild(option);
+            });
+        }
+
+        // Populate location dropdown for server creation
+        function populateLocationDropdown() {
+            const locationSelect = document.getElementById('server-location');
+            locationSelect.innerHTML = '<option value="">Select location...</option>';
+            
+            currentState.locations.forEach(location => {
+                const option = document.createElement('option');
+                option.value = location.attributes.id;
+                option.textContent = location.attributes.short;
+                locationSelect.appendChild(option);
+            });
+        }
+
+        // Form submissions
+        document.getElementById('server-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                name: document.getElementById('server-name').value,
+                user: document.getElementById('server-user').value,
+                egg: document.getElementById('server-egg').value,
+                docker_image: 'ghcr.io/pterodactyl/games:java', // Default image
+                startup: document.getElementById('server-startup').value,
+                environment: {
+                    BUNGEE_VERSION: 'latest',
+                    SERVER_JARFILE: 'server.jar',
+                    BUILD_NUMBER: 'latest',
+                    STARTUP: 'java -Xms128M -Xmx{{SERVER_MEMORY}}M -jar {{SERVER_JARFILE}}'
+                },
+                limits: {
+                    memory: parseInt(document.getElementById('server-ram').value),
+                    swap: 0,
+                    disk: parseInt(document.getElementById('server-disk').value),
+                    io: 500,
+                    cpu: parseInt(document.getElementById('server-cpu').value)
+                },
+                feature_limits: {
+                    databases: 5,
+                    backups: 1,
+                    allocations: 1
+                },
+                allocation: {
+                    default: 1
+                }
+            };
+
+            try {
+                const response = await makeApiRequest('application/servers', 'POST', formData);
+                if (response) {
+                    showSuccess('Server created successfully!');
+                    loadAllData(); // Refresh data
+                    document.getElementById('server-form').reset();
+                    document.querySelector('.tab[data-tab="servers"]').click();
+                }
+            } catch (error) {
+                console.error('Error creating server:', error);
+                showError(`Failed to create server: ${error.message}`);
+            }
+        });
+
+        document.getElementById('user-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                email: document.getElementById('user-email').value,
+                username: document.getElementById('user-username').value,
+                first_name: document.getElementById('user-firstname').value,
+                last_name: document.getElementById('user-lastname').value,
+                password: document.getElementById('user-password').value,
+                root_admin: document.getElementById('user-root').value === '1'
+            };
+
+            try {
+                const response = await makeApiRequest('application/users', 'POST', formData);
+                if (response) {
+                    showSuccess('User created successfully!');
+                    loadAllData(); // Refresh data
+                    document.getElementById('user-form').reset();
+                    document.querySelector('.tab[data-tab="users"]').click();
+                }
+            } catch (error) {
+                console.error('Error creating user:', error);
+                showError(`Failed to create user: ${error.message}`);
+            }
+        });
+
+        document.getElementById('server-settings-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!currentState.selectedServer) return;
+            
+            const formData = {
+                name: document.getElementById('edit-server-name').value,
+                limits: {
+                    memory: parseInt(document.getElementById('edit-server-ram').value),
+                    disk: parseInt(document.getElementById('edit-server-disk').value)
+                }
+            };
+
+            try {
+                const response = await makeApiRequest(`application/servers/${currentState.selectedServer}/details`, 'PATCH', formData);
+                if (response) {
+                    showSuccess('Server updated successfully!');
+                    loadAllData(); // Refresh data
+                }
+            } catch (error) {
+                console.error('Error updating server:', error);
+                showError(`Failed to update server: ${error.message}`);
+            }
+        });
+
+        // Server action buttons
+        document.getElementById('start-server').addEventListener('click', async function() {
+            if (!currentState.selectedServer) return;
+            
+            try {
+                const response = await makeApiRequest(`client/servers/${currentState.selectedServer}/power`, 'POST', { signal: 'start' });
+                if (response) {
+                    showSuccess('Start command sent to server!');
+                    // Refresh server details
+                    showServerDetails(currentState.selectedServer);
+                }
+            } catch (error) {
+                console.error('Error starting server:', error);
+                showError(`Failed to start server: ${error.message}`);
+            }
+        });
+
+        document.getElementById('stop-server').addEventListener('click', async function() {
+            if (!currentState.selectedServer) return;
+            
+            try {
+                const response = await makeApiRequest(`client/servers/${currentState.selectedServer}/power`, 'POST', { signal: 'stop' });
+                if (response) {
+                    showSuccess('Stop command sent to server!');
+                    // Refresh server details
+                    showServerDetails(currentState.selectedServer);
+                }
+            } catch (error) {
+                console.error('Error stopping server:', error);
+                showError(`Failed to stop server: ${error.message}`);
+            }
+        });
+
+        document.getElementById('restart-server').addEventListener('click', async function() {
+            if (!currentState.selectedServer) return;
+            
+            try {
+                const response = await makeApiRequest(`client/servers/${currentState.selectedServer}/power`, 'POST', { signal: 'restart' });
+                if (response) {
+                    showSuccess('Restart command sent to server!');
+                    // Refresh server details
+                    showServerDetails(currentState.selectedServer);
+                }
+            } catch (error) {
+                console.error('Error restarting server:', error);
+                showError(`Failed to restart server: ${error.message}`);
+            }
+        });
+
+        document.getElementById('kill-server').addEventListener('click', async function() {
+            if (!currentState.selectedServer) return;
+            
+            try {
+                const response = await makeApiRequest(`client/servers/${currentState.selectedServer}/power`, 'POST', { signal: 'kill' });
+                if (response) {
+                    showSuccess('Kill command sent to server!');
+                    // Refresh server details
+                    showServerDetails(currentState.selectedServer);
+                }
+            } catch (error) {
+                console.error('Error killing server:', error);
+                showError(`Failed to kill server: ${error.message}`);
+            }
+        });
+
+        document.getElementById('send-command').addEventListener('click', async function() {
+            const command = document.getElementById('console-command').value;
+            if (!command.trim() || !currentState.selectedServer) return;
+            
+            try {
+                const response = await makeApiRequest(`client/servers/${currentState.selectedServer}/command`, 'POST', { command });
+                if (response) {
+                    const console = document.getElementById('server-console');
+                    console.textContent += `\n[${new Date().toLocaleTimeString()}] > ${command}`;
+                    console.scrollTop = console.scrollHeight;
+                    document.getElementById('console-command').value = '';
+                }
+            } catch (error) {
+                console.error('Error sending command:', error);
+                showError(`Failed to send command: ${error.message}`);
+            }
+        });
+
+        document.getElementById('delete-server').addEventListener('click', async function() {
+            if (!currentState.selectedServer || !confirm('Are you sure you want to delete this server? This cannot be undone!')) {
+                return;
+            }
+            
+            try {
+                const response = await makeApiRequest(`application/servers/${currentState.selectedServer}`, 'DELETE');
+                if (response) {
+                    showSuccess('Server deleted successfully!');
+                    // Go back to servers list and refresh
+                    document.querySelector('.tab[data-tab="servers"]').click();
+                    loadAllData();
+                }
+            } catch (error) {
+                console.error('Error deleting server:', error);
+                showError(`Failed to delete server: ${error.message}`);
+            }
+        });
+
+        // Test connection button
+        document.getElementById('test-connection').addEventListener('click', async function() {
+            const panelUrl = document.getElementById('api-url').value;
+            if (!panelUrl) {
+                showError('Please enter Panel URL');
+                return;
+            }
+            
+            // Update config with new URL
+            config.panelUrl = panelUrl.endsWith('/') ? panelUrl.slice(0, -1) : panelUrl;
+            
+            const statusDiv = document.getElementById('connection-status');
+            statusDiv.textContent = 'Testing connection...';
+            statusDiv.style.color = 'inherit';
+            
+            try {
+                // Test by fetching user list
+                const response = await makeApiRequest('application/users');
+                if (response) {
+                    statusDiv.textContent = 'Connection successful!';
+                    statusDiv.style.color = '#43B581';
+                    loadAllData(); // Load all data if connection is successful
+                } else {
+                    statusDiv.textContent = 'Connection failed';
+                    statusDiv.style.color = '#F04747';
+                }
+            } catch (error) {
+                console.error('Connection test failed:', error);
+                statusDiv.textContent = `Connection failed: ${error.message}`;
+                statusDiv.style.color = '#F04747';
+            }
+        });
+
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', () => {
+            // Set the panel URL from config
+            document.getElementById('api-url').value = config.panelUrl;
+            
+            // Test connection automatically if URL is set
+            if (config.panelUrl && config.panelUrl !== 'https://your.pterodactyl.panel') {
+                document.getElementById('test-connection').click();
+            }
+        });
+    </script>
+</body>
+</html>
